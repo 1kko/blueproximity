@@ -153,11 +153,11 @@ function check_connection {
 	msg 'Attempting connection...'
 		case $CONNECTION_METHOD in
 		hcitool)
-			hcitool cc $DEVICE
+			$HCITOOL cc $DEVICE
 			CONNECTION_RESULT="`$HCITOOL con | grep $DEVICE`"
 			;;
 		rfcomm|*)
-			gksudo setsid $RFCOMM connect 0 $DEVICE 1&
+			setsid $RFCOMM connect 0 $DEVICE 1&
 			sleep 6
 			CONNECTION_RESULT="`$RFCOMM show * | grep $DEVICE | grep connect`"
 			;;
