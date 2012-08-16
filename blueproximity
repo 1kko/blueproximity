@@ -18,7 +18,8 @@ if [ ! -f  "$CONFIG_FILE" ]; then
 
 	hcitool scan
 	read -p "Please Enter your Device's Bluetooth MAC Address: " device_mac_addr
-		
+
+	#Mac Address Validation from http://raamdev.net/2009/mac-address-validation-regex-with-egrep/
 	if [[ -z `echo $device_mac_addr | egrep "^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$"` ]]; then
 		echo "Invalid Bluetooth MAC Address"
 	fi
