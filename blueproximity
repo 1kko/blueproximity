@@ -4,24 +4,46 @@
 # Modified By Jamie Paton 
 # Modified By Michele Marcucci http://www.michelem.org
 # Modified By Mone http://www.simonefabiano.com
-# Modified by ikko http://1kko.com
+# Modified by ikko http://1kko.com https://github.com/1kko/blueproximity
 
 CONFIG_FILE="$HOME/.blueproximity/blueproximity.conf"
 
+HCITOOL="/usr/bin/hcitool"
+RFCOMM="/usr/bin/rfcomm"
+L2PING="/usr/bin/l2ping"
+
+CHECK_INTERVAL=$CHECK_INTERVAL_FAR
+connected=0
+state="near"
+failures=0
+
 if [ ! -f  "$CONFIG_FILE" ]; then
 	[ -d `dirname $CONFIG_FILE` ] || mkdir `dirname $CONFIG_FILE`
-	# Creating Default Profile
+	echo "Creating Default Profile..."
+
+	hcitool scan
+	read -p "Please Enter your Device's Bluetooth MAC Address: " device_mac_addr
+		
+	if [[ -z `echo $device_mac_addr | egrep "^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$"` ]]; then
+		echo "Invalid Bluetooth MAC Address"
+	fi
+	
 	# Do NOT EDIT following line
-	# Instead edit $CONFIG_FILE
+	# Instead edit $CONFIG_FILE	
 	cat > $CONFIG_FILE << CEOF
-#!/bin/bash
+# Blueproximity Config File.
+# https://github.com/1kko/blueproximity
+
 # Set level of debuglog.
 # 0: no log, 1: log to file, 2: log to both file and stdout
-DEBUG_LEVEL=2
+DEBUG_LEVEL=1
+
+# Debug logs will be stored into following file.
+DEBUG="/tmp/btproximity.log"
 
 # You'll need to use the MAC address of your phone here
 # Use "hcitool scan" to find the MAC of your device
-DEVICE="00:00:00:00:00:00"
+DEVICE="$device_mac_addr"
 
 # How often to check the distance between phone and computer in seconds
 # When it's far it will check interval of \$CHECK_INTERVAL_FAR seconds,
@@ -43,7 +65,21 @@ CONNECTION_METHOD=rfcomm
 # Requires ssh key authorized previously using ssh-keygen
 # Reference: https://help.ubuntu.com/community/SSH/OpenSSH/Keys
 # Comment out if you don't need one
-REMOTE_PC=192.168.0.1
+#REMOTE_PC=192.168.0.1
+
+CEOF
+
+	echo "your config is stored to $CONFIG_FILE"
+	echo "to check out configuration, type:"
+	echo "  cat $CONFIG_FILE" 
+	echo ""
+	echo "Configuration Finished"
+	echo "now you can edit or run this script again in background."
+	exit 0
+fi
+
+source $CONFIG_FILE
+
 
 # The commands to run when your phone gets too far away
 function far_execution {
@@ -51,7 +87,7 @@ function far_execution {
 	gnome-screensaver-command -l
 
 	#lock the remote pc
-	[ \$REMOTE_PC ] && ssh \$USER@\$REMOTE_PC DISPLAY=:0 gnome-screensaver-command -l
+	[ $REMOTE_PC ] && ssh $USER@$REMOTE_PC DISPLAY=:0 gnome-screensaver-command -l
 }
 
 # The command to run when your phone is close again
@@ -63,7 +99,7 @@ function near_execution {
 	gnome-screensaver-command -d
 
 	#unlock the remote pc
-	[ \$REMOTE_PC ] && ssh \$USER@\$REMOTE_PC DISPLAY=:0 gnome-screensaver-command -d
+	[ $REMOTE_PC ] && ssh $USER@$REMOTE_PC DISPLAY=:0 gnome-screensaver-command -d
 
 	#FIXME: Redirect Phone's Bluetooth Audio to PC 
 	# currently it doesn't seem to work when using rfcomm method.
@@ -82,24 +118,9 @@ function proximity_execution {
 	
 	#following line came from http://chadarius.com/node/153
 	dbus-send --type=method_call --dest=org.gnome.ScreenSaver /org/gnome/ScreenSaver org.gnome.ScreenSaver.SimulateUserActivity
-	[ \$REMOTE_PC ] && ssh \$USER@\$REMOTE_PC DISPLAY=:0 gnome-screensaver-command -d
-	[ \$REMOTE_PC ] && ssh \$USER@\$REMOTE_PC DISPLAY=:0 dbus-send --type=method_call --dest=org.gnome.ScreenSaver /org/gnome/ScreenSaver org.gnome.ScreenSaver.SimulateUserActivity
+	[ $REMOTE_PC ] && ssh $USER@$REMOTE_PC DISPLAY=:0 gnome-screensaver-command -d
+	[ $REMOTE_PC ] && ssh $USER@$REMOTE_PC DISPLAY=:0 dbus-send --type=method_call --dest=org.gnome.ScreenSaver /org/gnome/ScreenSaver org.gnome.ScreenSaver.SimulateUserActivity
 }
-
-
-HCITOOL="/usr/bin/hcitool"
-DEBUG="/tmp/btproximity.log"
-RFCOMM="/usr/bin/rfcomm"
-L2PING="/usr/bin/l2ping"
-CEOF
-fi
-
-source $HOME/.blueproximity/blueproximity.conf
-
-CHECK_INTERVAL=$CHECK_INTERVAL_FAR
-connected=0
-state="near"
-failures=0
 
 function msg {
 	case $DEBUG_LEVEL in
