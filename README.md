@@ -15,7 +15,38 @@ default configuration is stored in "<your home dir>/.blueproximity/blueproximity
 
 
 Requirement
------------
+----
 - hcitool
 - rfcomm
 - l2ping
+
+
+Configuration
+----
+turn on your bluetooth device and set to pairing mode.
+
+run blueproximity in prompt
+ ./blueproximity
+
+it scan near bluetooth devices, and display mac address.
+when script prompts enter your Phone's bluetooth MAC address in the format of 00:12:34:56:78:9A
+ Please Enter your Device's Bluetooth MAC Address: 00:12:34:56:78:9A
+
+it will generate configuration file to <your homedir>/.blueproximity/blueproximity.conf
+
+ your config is stored to <your homedir>/.blueproximity/blueproximity.conf
+
+ to check out configuration, type:
+
+   cat <your homedir>/.blueproximity/blueproximity.conf
+
+
+now you can either run again to see if it works, or
+you can edit configuration file and script itself for your taste.
+
+
+Installation
+----
+you can make run the script when you login.
+If you are using Ubuntu:
+go to System Setting > Start Up Applications > Add 
