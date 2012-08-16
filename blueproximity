@@ -17,20 +17,19 @@ if [ ! -f  "$CONFIG_FILE" ]; then
 #!/bin/bash
 # Set level of debuglog.
 # 0: no log, 1: log to file, 2: log to both file and stdout
-DEBUG_LEVEL=0
+DEBUG_LEVEL=2
 
 # You'll need to use the MAC address of your phone here
 # Use "hcitool scan" to find the MAC of your device
 DEVICE="00:00:00:00:00:00"
 
 # How often to check the distance between phone and computer in seconds
-# When it's far it will check interval of $CHECK_INTERVAL_FAR seconds,
-# and if it's near it will check $CHECK_INTERVAL_NEAR seconds.
+# When it's far it will check interval of \$CHECK_INTERVAL_FAR seconds,
+# and if it's near it will check \$CHECK_INTERVAL_NEAR seconds.
 # because recessive ping will drain your phone's battery.
-
 CHECK_INTERVAL_FAR=5
 CHECK_INTERVAL_NEAR=60
-CHECK_INTERVAL=$CHECK_INTERVAL_FAR
+
 # The RSSI threshold at which a phone is considered far or near
 THRESHOLD=-15
 
@@ -52,7 +51,7 @@ function far_execution {
 	gnome-screensaver-command -l
 
 	#lock the remote pc
-	[ \$REMOTE_PC ] && ssh $USER@$REMOTE_PC DISPLAY=:0 gnome-screensaver-command -l
+	[ \$REMOTE_PC ] && ssh \$USER@\$REMOTE_PC DISPLAY=:0 gnome-screensaver-command -l
 }
 
 # The command to run when your phone is close again
@@ -64,15 +63,15 @@ function near_execution {
 	gnome-screensaver-command -d
 
 	#unlock the remote pc
-	[ \$REMOTE_PC ] && ssh $USER@$REMOTE_PC DISPLAY=:0 gnome-screensaver-command -d
+	[ \$REMOTE_PC ] && ssh \$USER@\$REMOTE_PC DISPLAY=:0 gnome-screensaver-command -d
 
 	#FIXME: Redirect Phone's Bluetooth Audio to PC 
 	# currently it doesn't seem to work when using rfcomm method.
 	# reference: http://askubuntu.com/questions/2573/can-i-use-my-computer-as-an-a2dp-receiver/109533#109533
 	# and also : http://blog.cyphermox.net/2012/03/call-for-testing-bluez-a2dp-and-hsphfp.html
-	#local BTSOURCE=`pactl list short sources | grep bluez_source | awk '{ print $2; }'`
-	#local SINK=`pactl list short sinks | grep -v Monitor | grep alsa_output.pci | awk '{ print $2; }'`
-	#pactl load-module module-loopback source=$BTSOURCE sink=$SINK
+	#local BTSOURCE=\`pactl list short sources | grep bluez_source | awk '{ print \$2; }'\`
+	#local SINK=\`pactl list short sinks | grep -v Monitor | grep alsa_output.pci | awk '{ print \$2; }'\`
+	#pactl load-module module-loopback source=\$BTSOURCE sink=\$SINK
 }
 
 # The command to run when your phone is near. 
@@ -83,8 +82,8 @@ function proximity_execution {
 	
 	#following line came from http://chadarius.com/node/153
 	dbus-send --type=method_call --dest=org.gnome.ScreenSaver /org/gnome/ScreenSaver org.gnome.ScreenSaver.SimulateUserActivity
-	[ \$REMOTE_PC ] && ssh $USER@$REMOTE_PC DISPLAY=:0 gnome-screensaver-command -d
-	[ \$REMOTE_PC ] && ssh $USER@$REMOTE_PC DISPLAY=:0 dbus-send --type=method_call --dest=org.gnome.ScreenSaver /org/gnome/ScreenSaver org.gnome.ScreenSaver.SimulateUserActivity
+	[ \$REMOTE_PC ] && ssh \$USER@\$REMOTE_PC DISPLAY=:0 gnome-screensaver-command -d
+	[ \$REMOTE_PC ] && ssh \$USER@\$REMOTE_PC DISPLAY=:0 dbus-send --type=method_call --dest=org.gnome.ScreenSaver /org/gnome/ScreenSaver org.gnome.ScreenSaver.SimulateUserActivity
 }
 
 
@@ -97,6 +96,7 @@ fi
 
 source $HOME/.blueproximity/blueproximity.conf
 
+CHECK_INTERVAL=$CHECK_INTERVAL_FAR
 connected=0
 state="near"
 failures=0
@@ -136,7 +136,7 @@ function check_connection {
 			CONNECTION_RESULT="`$HCITOOL con | grep $DEVICE`"
 			;;
 		rfcomm|*)
-			setsid gksudo $RFCOMM connect 0 $DEVICE 1&
+			gksudo setsid $RFCOMM connect 0 $DEVICE 1&
 			sleep 6
 			CONNECTION_RESULT="`$RFCOMM show * | grep $DEVICE | grep connect`"
 			;;
