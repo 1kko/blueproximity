@@ -1,0 +1,222 @@
+#!/bin/bash
+#set -o verbose sh -v
+# Copied from Steven on http://gentoo-wiki.com/Talk:TIP_Bluetooth_Proximity_Monitor
+# Modified By Jamie Paton 
+# Modified By Michele Marcucci http://www.michelem.org
+# Modified By Mone http://www.simonefabiano.com
+# Modified by ikko http://1kko.com
+
+CONFIG_FILE="$HOME/.blueproximity/blueproximity.conf"
+
+if [ ! -f  "$CONFIG_FILE" ]; then
+	[ -d `dirname $CONFIG_FILE` ] || mkdir `dirname $CONFIG_FILE`
+	# Creating Default Profile
+	# Do NOT EDIT following line
+	# Instead edit $CONFIG_FILE
+	cat > $CONFIG_FILE << CEOF
+#!/bin/bash
+# Set level of debuglog.
+# 0: no log, 1: log to file, 2: log to both file and stdout
+DEBUG_LEVEL=0
+
+# You'll need to use the MAC address of your phone here
+# Use "hcitool scan" to find the MAC of your device
+DEVICE="00:00:00:00:00:00"
+
+# How often to check the distance between phone and computer in seconds
+# When it's far it will check interval of $CHECK_INTERVAL_FAR seconds,
+# and if it's near it will check $CHECK_INTERVAL_NEAR seconds.
+# because recessive ping will drain your phone's battery.
+
+CHECK_INTERVAL_FAR=5
+CHECK_INTERVAL_NEAR=60
+CHECK_INTERVAL=$CHECK_INTERVAL_FAR
+# The RSSI threshold at which a phone is considered far or near
+THRESHOLD=-15
+
+# Number of failed connections before declaring the device "far"
+FAILURES_THRESHOLD=2
+
+# Connection method can be used : [rfcomm|hcitool]. default "rfcomm"
+CONNECTION_METHOD=rfcomm
+
+# Remote PC IP Address.
+# Requires ssh key authorized previously using ssh-keygen
+# Reference: https://help.ubuntu.com/community/SSH/OpenSSH/Keys
+# Comment out if you don't need one
+REMOTE_PC=192.168.0.1
+
+# The commands to run when your phone gets too far away
+function far_execution {
+	#lock the pc
+	gnome-screensaver-command -l
+
+	#lock the remote pc
+	[ \$REMOTE_PC ] && ssh $USER@$REMOTE_PC DISPLAY=:0 gnome-screensaver-command -l
+}
+
+# The command to run when your phone is close again
+function near_execution {
+	#show the login window
+	#/opt/gnome/bin/gnome-screensaver-command --poke > /dev/null 2>&1
+
+	#unlock the pc
+	gnome-screensaver-command -d
+
+	#unlock the remote pc
+	[ \$REMOTE_PC ] && ssh $USER@$REMOTE_PC DISPLAY=:0 gnome-screensaver-command -d
+
+	#FIXME: Redirect Phone's Bluetooth Audio to PC 
+	# currently it doesn't seem to work when using rfcomm method.
+	# reference: http://askubuntu.com/questions/2573/can-i-use-my-computer-as-an-a2dp-receiver/109533#109533
+	# and also : http://blog.cyphermox.net/2012/03/call-for-testing-bluez-a2dp-and-hsphfp.html
+	#local BTSOURCE=`pactl list short sources | grep bluez_source | awk '{ print $2; }'`
+	#local SINK=`pactl list short sinks | grep -v Monitor | grep alsa_output.pci | awk '{ print $2; }'`
+	#pactl load-module module-loopback source=$BTSOURCE sink=$SINK
+}
+
+# The command to run when your phone is near. 
+function proximity_execution {
+	# usually used for simulating you are near.
+	msg "Simulating User Activity"
+	gnome-screensaver-command -d
+	
+	#following line came from http://chadarius.com/node/153
+	dbus-send --type=method_call --dest=org.gnome.ScreenSaver /org/gnome/ScreenSaver org.gnome.ScreenSaver.SimulateUserActivity
+	[ \$REMOTE_PC ] && ssh $USER@$REMOTE_PC DISPLAY=:0 gnome-screensaver-command -d
+	[ \$REMOTE_PC ] && ssh $USER@$REMOTE_PC DISPLAY=:0 dbus-send --type=method_call --dest=org.gnome.ScreenSaver /org/gnome/ScreenSaver org.gnome.ScreenSaver.SimulateUserActivity
+}
+
+
+HCITOOL="/usr/bin/hcitool"
+DEBUG="/tmp/btproximity.log"
+RFCOMM="/usr/bin/rfcomm"
+L2PING="/usr/bin/l2ping"
+CEOF
+fi
+
+source $HOME/.blueproximity/blueproximity.conf
+
+connected=0
+state="near"
+failures=0
+
+function msg {
+	case $DEBUG_LEVEL in
+	1) 	
+		# only to file
+		echo "$@" >> "$DEBUG"
+		;;
+	2)
+		# both file and stdout
+		echo "$@" | tee "$DEBUG"
+		;;
+	0|*)
+		# no debug
+		echo -n ""
+		;;
+	esac
+}
+
+function check_connection {
+	connected=0;
+	found=0
+	for s in `$HCITOOL con`; do
+		if [[ `echo $s |grep $DEVICE` ]]; then
+			found=1;
+		fi
+	done
+	if [[ $found == 1 ]]; then
+		connected=1;
+	else
+	msg 'Attempting connection...'
+		case $CONNECTION_METHOD in
+		hcitool)
+			hcitool cc $DEVICE
+			CONNECTION_RESULT="`$HCITOOL con | grep $DEVICE`"
+			;;
+		rfcomm|*)
+			setsid gksudo $RFCOMM connect 0 $DEVICE 1&
+			sleep 6
+			CONNECTION_RESULT="`$RFCOMM show * | grep $DEVICE | grep connect`"
+			;;
+		esac
+
+		if [ -n "$CONNECTION_RESULT" ]; then
+			msg 'Connected'
+			connected=1;
+		else
+			if [ -z "`$L2PING -c 1 -t 2 -i $DEVICE 2>&1`" ]; then
+					if [ -z "`$HCITOOL cc $DEVICE 2>&1`" ]; then
+						msg 'Ping is good!'
+						connected=1;
+					else
+						msg "ERROR: Could not connect to device $DEVICE."
+						connected=0;
+					fi
+			fi
+		fi
+	fi
+}
+
+function is_far {
+	if [[ "$state" == "near" ]]; then
+		let "failures += 1"
+		msg "*** Device \"$dev_name\" [$DEVICE] has left proximity, failures = $failures"
+		if [[ $failures -ge FAILURES_THRESHOLD ]]; then 
+			#i had problems because sometimes the connection fails even if the mobile is near. Let the connection fail more times before declaring the mobile as "far"
+			state="far"
+			far_execution
+		fi
+		CHECK_INTERVAL=$CHECK_INTERVAL_FAR
+		msg "Current Interval=$CHECK_INTERVAL"
+	fi
+}
+
+function is_near {
+	#reset the number of failures
+	failures=0
+	if [[ "$state" == "far" ]]; then
+		msg "*** Device \"$dev_name\" [$DEVICE] is within proximity"	
+		state="near"
+		near_execution
+	fi
+	CHECK_INTERVAL=$CHECK_INTERVAL_NEAR
+	msg "Current Interval=$CHECK_INTERVAL"
+	proximity_execution
+}
+
+
+#don't start the lock-unlock mechanism until we don't connect for the first time
+while [[ $connected -eq 0 ]]; do
+	msg "init loop"
+	check_connection
+	sleep $CHECK_INTERVAL
+done
+
+dev_name=`$HCITOOL name $DEVICE`
+
+msg "Monitoring proximity of \"$dev_name\" [$DEVICE]";
+
+while /bin/true; do
+	msg "execution loop"
+	check_connection
+	if [[ $connected -eq 1 ]]; then
+		#we're connected
+		rssi=$($HCITOOL rssi $DEVICE | sed -e 's/RSSI return value: //g')
+
+		if [[ $rssi -le $THRESHOLD ]]; then
+			#we're connected but far
+			is_far
+		else
+			#we're connected and near
+			is_near
+		fi
+		msg "state = $state, RSSI = $rssi"
+	else 
+		#we're no more connected
+		is_far
+		msg "not connected"
+	fi
+	sleep $CHECK_INTERVAL
+done
