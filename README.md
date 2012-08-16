@@ -54,4 +54,5 @@ go to System Setting > Start Up Applications > Add
 Troubleshooting
 ----
 Ubuntu 12.04 I have to run rfcomm in root mode, so I have changed rfcomm's priviledge mode in running.
+
 sudo chmod 6755 /usr/bin/rfcomm
