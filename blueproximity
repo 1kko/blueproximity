@@ -12,11 +12,6 @@ HCITOOL="/usr/bin/hcitool"
 RFCOMM="/usr/bin/rfcomm"
 L2PING="/usr/bin/l2ping"
 
-CHECK_INTERVAL=$CHECK_INTERVAL_FAR
-connected=0
-state="near"
-failures=0
-
 if [ ! -f  "$CONFIG_FILE" ]; then
 	[ -d `dirname $CONFIG_FILE` ] || mkdir `dirname $CONFIG_FILE`
 	echo "Creating Default Profile..."
@@ -80,6 +75,10 @@ fi
 
 source $CONFIG_FILE
 
+CHECK_INTERVAL=$CHECK_INTERVAL_FAR
+connected=0
+state="near"
+failures=0
 
 # The commands to run when your phone gets too far away
 function far_execution {
